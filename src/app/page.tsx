@@ -5,10 +5,18 @@ import SaveLinkForm from './SaveLinkForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function HomePage() {
+interface HomePageProps {
+  searchParams: Promise<{ shared_url?: string }>;
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const resolvedParams = await searchParams;
+  const sharedUrl = resolvedParams.shared_url;
+
   const user = await getSessionUser();
   if (!user) {
-    redirect('/login');
+    const loginQuery = sharedUrl ? `?shared_url=${encodeURIComponent(sharedUrl)}` : '';
+    redirect(`/login${loginQuery}`);
   }
 
   // Fetch user categories to populate dropdown
@@ -19,7 +27,11 @@ export default async function HomePage() {
   
   return (
     <div className="container" style={{ padding: '40px 16px', maxWidth: '600px' }}>
-      <SaveLinkForm initialCategories={catRes.rows} />
+      <SaveLinkForm 
+        key={sharedUrl || 'empty'}
+        initialCategories={catRes.rows} 
+        initialUrl={sharedUrl} 
+      />
     </div>
   );
 }

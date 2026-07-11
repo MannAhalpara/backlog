@@ -10,11 +10,12 @@ interface Category {
 
 interface SaveLinkFormProps {
   initialCategories: Category[];
+  initialUrl?: string;
 }
 
-export default function SaveLinkForm({ initialCategories }: SaveLinkFormProps) {
+export default function SaveLinkForm({ initialCategories, initialUrl = '' }: SaveLinkFormProps) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl);
   const [note, setNote] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');

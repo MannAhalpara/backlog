@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,6 @@ export const metadata: Metadata = {
       { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
   },
-  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
@@ -29,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <ServiceWorkerRegister />
         <Navbar />
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {children}

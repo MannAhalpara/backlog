@@ -60,7 +60,9 @@ export default function LoginPage() {
       
       // Successfully authenticated! Redirect to home page using full page navigation
       // to ensure cookies are read and Navbar server component is re-evaluated.
-      window.location.href = '/';
+      const params = new URLSearchParams(window.location.search);
+      const sharedUrl = params.get('shared_url');
+      window.location.href = sharedUrl ? `/?shared_url=${encodeURIComponent(sharedUrl)}` : '/';
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
