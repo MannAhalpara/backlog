@@ -230,8 +230,7 @@ body {
   border-radius: 30px;
   box-shadow: none;
   padding: 12px 24px;
-  position: sticky;
-  top: 16px;
+  position: relative;
   z-index: 50;
   transition: all 0.25s ease;
 }
