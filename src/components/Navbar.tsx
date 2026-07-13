@@ -6,11 +6,7 @@ export default async function Navbar() {
   const user = await getSessionUser();
 
   return (
-    <header style={{
-      backgroundColor: 'var(--card-bg)',
-      borderBottom: '1px solid var(--border)',
-      padding: '12px 0'
-    }}>
+    <header className="glass-navbar">
       <div className="container flex align-center justify-between" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link 
           href={user ? "/dashboard" : "/login"} 
@@ -45,9 +41,7 @@ export default async function Navbar() {
             <Link href="/dashboard" style={{ fontSize: '14px', fontWeight: '500', color: 'var(--muted)' }}>
               Dashboard
             </Link>
-            <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
-              {user.email}
-            </span>
+
             <a 
               href="/api/auth/logout" 
               className="btn btn-secondary" 

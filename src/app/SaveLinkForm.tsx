@@ -87,13 +87,9 @@ export default function SaveLinkForm({ initialCategories, initialUrl = '' }: Sav
 
   if (success) {
     return (
-      <div style={{
-        backgroundColor: 'var(--card-bg)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
+      <div className="glass-panel" style={{
         padding: '30px',
-        textAlign: 'center',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        textAlign: 'center'
       }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--foreground)', marginBottom: '8px' }}>
@@ -119,12 +115,8 @@ export default function SaveLinkForm({ initialCategories, initialUrl = '' }: Sav
   }
 
   return (
-    <div style={{
-      backgroundColor: 'var(--card-bg)',
-      border: '1px solid var(--border)',
-      borderRadius: '8px',
-      padding: '30px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+    <div className="glass-panel" style={{
+      padding: '30px'
     }}>
       <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--foreground)', marginBottom: '20px' }}>
         Add to Backlog

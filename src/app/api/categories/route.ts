@@ -10,7 +10,17 @@ export async function GET() {
     }
 
     const res = await query(
-      'SELECT id, name, created_at FROM categories WHERE user_id = $1 ORDER BY name ASC',
+      `SELECT 
+        c.id, 
+        c.name, 
+        c.created_at,
+        COUNT(l.id)::int as total_count,
+        COUNT(CASE WHEN l.status = 'pending' THEN 1 END)::int as pending_count
+      FROM categories c
+      LEFT JOIN links l ON c.id = l.category_id
+      WHERE c.user_id = $1
+      GROUP BY c.id, c.name, c.created_at
+      ORDER BY c.name ASC`,
       [user.userId]
     );
 

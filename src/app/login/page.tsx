@@ -79,14 +79,10 @@ export default function LoginPage() {
       minHeight: '60vh',
       padding: '20px'
     }}>
-      <div style={{
+      <div className="glass-panel" style={{
         width: '100%',
         maxWidth: '400px',
-        backgroundColor: 'var(--card-bg)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        padding: '30px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        padding: '30px'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--foreground)' }}>

@@ -63,9 +63,13 @@ export async function GET(request: Request) {
 
     // Filter by category
     if (category && category !== 'all') {
-      paramCount++;
-      sql += ` AND l.category_id = $${paramCount}`;
-      params.push(category);
+      if (category === 'null' || category === 'uncategorized') {
+        sql += ` AND l.category_id IS NULL`;
+      } else {
+        paramCount++;
+        sql += ` AND l.category_id = $${paramCount}`;
+        params.push(category);
+      }
     }
 
     // Search query

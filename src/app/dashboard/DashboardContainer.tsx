@@ -13,13 +13,16 @@ import {
   CheckCircle2,
   Calendar,
   AlertCircle,
-  Clock
+  Clock,
+  Edit2
 } from 'lucide-react';
 import { LinkedInIcon, InstagramIcon, YouTubeIcon } from '@/components/BrandIcons';
 
 interface Category {
   id: string;
   name: string;
+  total_count?: number;
+  pending_count?: number;
 }
 
 interface LinkItem {
@@ -51,13 +54,24 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
   // State
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [sources, setSources] = useState<string[]>([]);
-  const [categories] = useState<Category[]>(initialCategories);
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [stats, setStats] = useState<Stats>({
     totalSaved: 0,
     pending: 0,
     visitedNotClosed: 0,
     doneThisWeek: 0,
   });
+
+  // Filter redesign state
+  const [filterMode, setFilterMode] = useState<'none' | 'category' | 'apps'>('none');
+  const [drilledCategory, setDrilledCategory] = useState<Category | 'uncategorized' | null>(null);
+  const [drilledApp, setDrilledApp] = useState<string | null>(null);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+
+  // Category inline actions
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +135,18 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
     }
   };
 
+  // Fetch Categories with counts
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/categories');
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      const data = await res.json();
+      setCategories(data.categories || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
   // Fetch Popups & Filter by LocalStorage dismissals
   const checkPopups = async () => {
     try {
@@ -141,16 +167,20 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
         return !dismissalTime || clickedTime > dismissalTime;
       });
 
-      setPopupLinks(activePopups);
-      if (activePopups.length > 0) {
-        setActivePopupIndex(0);
-        setRemindMode(false);
-        setCustomRemindDate('');
-      } else {
-        setActivePopupIndex(null);
-      }
+      popupLinksSet(activePopups);
     } catch (err) {
       console.error('Error checking popups:', err);
+    }
+  };
+
+  const popupLinksSet = (activePopups: LinkItem[]) => {
+    setPopupLinks(activePopups);
+    if (activePopups.length > 0) {
+      setActivePopupIndex(0);
+      setRemindMode(false);
+      setCustomRemindDate('');
+    } else {
+      setActivePopupIndex(null);
     }
   };
 
@@ -159,11 +189,20 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
     fetchLinks();
   }, [appFilter, categoryFilter, debouncedSearch, sortOrder, viewMode]);
 
-  // Load stats and popups on page mount
+  // Load stats, categories and popups on page mount
   useEffect(() => {
     fetchStats();
+    fetchCategories();
     checkPopups();
   }, []);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!filterDropdownOpen) return;
+    const closeDropdown = () => setFilterDropdownOpen(false);
+    document.addEventListener('click', closeDropdown);
+    return () => document.removeEventListener('click', closeDropdown);
+  }, [filterDropdownOpen]);
 
   // Format age since saved
   const getDaysSince = (dateStr: string) => {
@@ -257,9 +296,10 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
         setActivePopupIndex(null);
       }
 
-      // 4. Refresh page data (stats and links list)
+      // 4. Refresh page data
       fetchLinks();
       fetchStats();
+      fetchCategories();
     } catch (err) {
       console.error('Error processing popup action:', err);
       alert('Error updating link.');
@@ -280,12 +320,61 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       });
       if (!res.ok) throw new Error('Failed to delete link');
 
-      // Refetch links & stats
+      // Refetch stats, categories & links
       fetchLinks();
       fetchStats();
+      fetchCategories();
     } catch (err) {
       console.error('Error deleting link:', err);
       alert('Could not delete link.');
+    }
+  };
+
+  // Category Actions
+  const handleSaveRename = async (id: string) => {
+    if (!renameValue || renameValue.trim() === '') {
+      alert('Category name cannot be empty.');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/categories/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameValue.trim() }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to rename category');
+      }
+      
+      setEditingCategoryId(null);
+      await fetchCategories();
+      await fetchLinks();
+    } catch (err: any) {
+      console.error('Error renaming category:', err);
+      alert(err.message || 'Could not rename category.');
+    }
+  };
+
+  const handleDeleteCategoryClick = (cat: Category) => {
+    setDeletingCategory(cat);
+  };
+
+  const handleDeleteCategory = async (id: string, mode: 'only' | 'all') => {
+    try {
+      const res = await fetch(`/api/categories/${id}?mode=${mode}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete category');
+      
+      setDeletingCategory(null);
+      await fetchCategories();
+      await fetchLinks();
+      await fetchStats();
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      alert('Could not delete category.');
     }
   };
 
@@ -298,7 +387,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px'
       }}>
-        <div style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ backgroundColor: 'var(--muted-light)', padding: '10px', borderRadius: '8px', color: 'var(--muted)' }}><Inbox size={22} /></div>
           <div>
             <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Total Saved</div>
@@ -306,7 +395,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
           </div>
         </div>
 
-        <div style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ backgroundColor: 'var(--primary-light)', padding: '10px', borderRadius: '8px', color: 'var(--primary)' }}><Clock size={22} /></div>
           <div>
             <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Pending Links</div>
@@ -314,7 +403,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
           </div>
         </div>
 
-        <div style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ backgroundColor: '#fffbeb', padding: '10px', borderRadius: '8px', color: '#d97706' }}><AlertCircle size={22} /></div>
           <div>
             <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Visited & Open</div>
@@ -322,7 +411,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
           </div>
         </div>
 
-        <div style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ backgroundColor: '#ecfdf5', padding: '10px', borderRadius: '8px', color: '#059669' }}><CheckCircle2 size={22} /></div>
           <div>
             <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Done This Week</div>
@@ -340,7 +429,14 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
         <button
           type="button"
           className={`btn ${viewMode === 'history' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setViewMode(viewMode === 'pending' ? 'history' : 'pending')}
+          onClick={() => {
+            setViewMode(viewMode === 'pending' ? 'history' : 'pending');
+            // Reset drilldowns when switching backlog/history
+            setDrilledCategory(null);
+            setDrilledApp(null);
+            setCategoryFilter('all');
+            setAppFilter('all');
+          }}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', fontSize: '13px' }}
         >
           <History size={16} />
@@ -349,14 +445,11 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       </div>
 
       {/* Filter Row */}
-      <div style={{
+      <div className="glass-panel" style={{
         display: 'flex',
         flexWrap: 'wrap',
         gap: '12px',
         alignItems: 'center',
-        backgroundColor: 'var(--card-bg)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
         padding: '16px'
       }}>
         {/* Search */}
@@ -371,162 +464,448 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
           />
         </div>
 
-        {/* Category Filter */}
-        <div style={{ flex: '1 1 150px' }}>
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="all">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* App Source Filter */}
-        <div style={{ flex: '1 1 150px' }}>
-          <select value={appFilter} onChange={(e) => setAppFilter(e.target.value)}>
-            <option value="all">All Sources</option>
-            {sources.map((src) => (
-              <option key={src} value={src}>{src.charAt(0).toUpperCase() + src.slice(1)}</option>
-            ))}
-          </select>
-        </div>
-
         {/* Sort Order Toggle */}
-        <div>
+        {(filterMode === 'none' || drilledCategory !== null || drilledApp !== null) && (
+          <div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+              style={{ padding: '10px 14px', fontSize: '13px' }}
+            >
+              {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+            </button>
+          </div>
+        )}
+
+        {/* Filter By Dropdown Button */}
+        <div style={{ position: 'relative', marginLeft: 'auto' }}>
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-            style={{ padding: '10px 14px', fontSize: '13px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setFilterDropdownOpen(!filterDropdownOpen);
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', fontSize: '13px' }}
           >
-            {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+            <span>Filter by: {filterMode === 'none' ? 'None' : filterMode === 'category' ? 'Category' : 'Apps'}</span>
           </button>
+          
+          {filterDropdownOpen && (
+            <div className="dropdown-menu">
+              <div 
+                className={`dropdown-item ${filterMode === 'none' ? 'active' : ''}`}
+                onClick={() => {
+                  setFilterMode('none');
+                  setCategoryFilter('all');
+                  setAppFilter('all');
+                  setDrilledCategory(null);
+                  setDrilledApp(null);
+                }}
+              >
+                None
+              </div>
+              <div 
+                className={`dropdown-item ${filterMode === 'category' ? 'active' : ''}`}
+                onClick={() => {
+                  setFilterMode('category');
+                  setCategoryFilter('all');
+                  setAppFilter('all');
+                  setDrilledCategory(null);
+                  setDrilledApp(null);
+                }}
+              >
+                Category
+              </div>
+              <div 
+                className={`dropdown-item ${filterMode === 'apps' ? 'active' : ''}`}
+                onClick={() => {
+                  setFilterMode('apps');
+                  setCategoryFilter('all');
+                  setAppFilter('all');
+                  setDrilledCategory(null);
+                  setDrilledApp(null);
+                }}
+              >
+                Apps
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Links List */}
+      {/* Content Area */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted)', fontSize: '14px' }}>
           Loading links...
         </div>
-      ) : links.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          border: '1px dashed var(--border)',
-          borderRadius: '8px',
-          backgroundColor: 'var(--card-bg)',
-          color: 'var(--muted)'
-        }}>
-          <Inbox size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-          <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--foreground)' }}>No links found</h3>
-          <p style={{ fontSize: '14px', marginTop: '4px' }}>
-            {viewMode === 'pending'
-              ? "Your backlog is clear! Paste a new link to get started."
-              : "No completed links in your history yet."}
-          </p>
+      ) : filterMode === 'category' && !drilledCategory ? (
+        /* Render Category Grid */
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <button 
+              className="btn btn-secondary"
+              style={{ fontSize: '13px', padding: '6px 12px' }}
+              onClick={() => {
+                setFilterMode('none');
+                setCategoryFilter('all');
+                setDrilledCategory(null);
+              }}
+            >
+              ← Back to All Links
+            </button>
+            <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '500' }}>
+              Filter by Category
+            </span>
+          </div>
+
+          <div className="card-grid">
+            {categories.map((cat) => {
+              const isEditing = editingCategoryId === cat.id;
+              // If viewMode is history, count only completed links, else pending
+              const count = viewMode === 'history' 
+                ? (cat.total_count || 0) - (cat.pending_count || 0)
+                : (cat.pending_count || 0);
+              
+              return (
+                <div 
+                  key={cat.id} 
+                  className="glass-panel filter-card"
+                  onClick={() => {
+                    if (!isEditing) {
+                      setCategoryFilter(cat.id);
+                      setDrilledCategory(cat);
+                    }
+                  }}
+                >
+                  {isEditing ? (
+                    <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                      <input
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename(cat.id);
+                          if (e.key === 'Escape') setEditingCategoryId(null);
+                        }}
+                        style={{ padding: '6px 10px', fontSize: '13px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                          onClick={() => setEditingCategoryId(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          className="btn btn-primary" 
+                          style={{ padding: '4px 8px', fontSize: '12px' }}
+                          onClick={() => handleSaveRename(cat.id)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Card Actions (Rename, Delete) */}
+                      <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '4px' }}>
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCategoryId(cat.id);
+                            setRenameValue(cat.name);
+                          }}
+                          title="Rename Category"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-icon btn-icon-danger"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCategoryClick(cat);
+                          }}
+                          title="Delete Category"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div>
+                        <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--foreground)', marginRight: '50px', wordBreak: 'break-word' }}>
+                          {cat.name}
+                        </h3>
+                      </div>
+                      <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500', marginTop: '12px' }}>
+                        {count} {count === 1 ? 'link' : 'links'}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Uncategorized Card */}
+            {(() => {
+              // Get uncategorized links count for the active viewMode
+              const uncategorizedCount = links.filter(l => l.category_id === null).length;
+              if (uncategorizedCount > 0) {
+                return (
+                  <div 
+                    className="glass-panel filter-card"
+                    onClick={() => {
+                      setCategoryFilter('uncategorized');
+                      setDrilledCategory('uncategorized');
+                    }}
+                  >
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--foreground)' }}>
+                        Uncategorized
+                      </h3>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500', marginTop: '12px' }}>
+                      {uncategorizedCount} {uncategorizedCount === 1 ? 'link' : 'links'}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        </div>
+      ) : filterMode === 'apps' && !drilledApp ? (
+        /* Render Apps Grid */
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <button 
+              className="btn btn-secondary"
+              style={{ fontSize: '13px', padding: '6px 12px' }}
+              onClick={() => {
+                setFilterMode('none');
+                setAppFilter('all');
+                setDrilledApp(null);
+              }}
+            >
+              ← Back to All Links
+            </button>
+            <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '500' }}>
+              Filter by Apps
+            </span>
+          </div>
+
+          <div className="card-grid">
+            {sources.map((src) => {
+              const count = links.filter(l => l.app_source === src).length;
+              
+              return (
+                <div 
+                  key={src} 
+                  className="glass-panel filter-card"
+                  onClick={() => {
+                    setAppFilter(src);
+                    setDrilledApp(src);
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {renderAppIcon(src)}
+                    <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--foreground)' }}>
+                      {src.charAt(0).toUpperCase() + src.slice(1)}
+                    </h3>
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500', marginTop: '12px' }}>
+                    {count} {count === 1 ? 'link' : 'links'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {links.map((link) => {
-            const badge = getStatusBadgeConfig(link);
-            return (
-              <div
-                key={link.id}
-                style={{
-                  backgroundColor: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '16px',
-                  // Mobile stack styling triggers automatically
-                  flexWrap: 'wrap'
+        /* Render Links List */
+        <div>
+          {/* Drilled-down Header */}
+          {drilledCategory && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button 
+                className="btn btn-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+                onClick={() => {
+                  setCategoryFilter('all');
+                  setDrilledCategory(null);
                 }}
               >
-                {/* Left content group */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: '1 1 300px' }}>
-                  <div style={{
-                    backgroundColor: 'var(--muted-light)',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: '2px'
-                  }}>
-                    {renderAppIcon(link.app_source)}
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ fontWeight: '600', fontSize: '15px', color: 'var(--foreground)', wordBreak: 'break-word' }}>
-                      {link.note || 'Untitled Link'}
-                    </div>
-                    
-                    <a
-                      href={`/api/links/${link.id}/open`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        fontSize: '13px',
-                        color: 'var(--muted)',
-                        wordBreak: 'break-all',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      {link.url}
-                      <ExternalLink size={12} style={{ flexShrink: 0 }} />
-                    </a>
+                ← Back to Categories
+              </button>
+              <button 
+                className="btn btn-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+                onClick={() => {
+                  setFilterMode('none');
+                  setCategoryFilter('all');
+                  setDrilledCategory(null);
+                }}
+              >
+                ← Back to All Links
+              </button>
+              <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '600', marginLeft: 'auto' }}>
+                Category: {drilledCategory === 'uncategorized' ? 'Uncategorized' : drilledCategory.name}
+              </span>
+            </div>
+          )}
 
-                    <div style={{ fontSize: '12px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                      <span>{getDaysSince(link.created_at)}</span>
-                      {link.category_name && (
-                        <>
-                          <span>•</span>
-                          <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '500' }}>
-                            {link.category_name}
-                          </span>
-                        </>
+          {drilledApp && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button 
+                className="btn btn-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+                onClick={() => {
+                  setAppFilter('all');
+                  setDrilledApp(null);
+                }}
+              >
+                ← Back to Apps
+              </button>
+              <button 
+                className="btn btn-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+                onClick={() => {
+                  setFilterMode('none');
+                  setAppFilter('all');
+                  setDrilledApp(null);
+                }}
+              >
+                ← Back to All Links
+              </button>
+              <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '600', marginLeft: 'auto' }}>
+                App Source: {drilledApp.charAt(0).toUpperCase() + drilledApp.slice(1)}
+              </span>
+            </div>
+          )}
+
+          {links.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              border: '1px dashed var(--border)',
+              borderRadius: '8px',
+              backgroundColor: 'var(--card-bg)',
+              color: 'var(--muted)'
+            }}>
+              <Inbox size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--foreground)' }}>No links found</h3>
+              <p style={{ fontSize: '14px', marginTop: '4px' }}>
+                {viewMode === 'pending'
+                  ? "Your backlog is clear! Paste a new link to get started."
+                  : "No completed links in your history yet."}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {links.map((link) => {
+                const badge = getStatusBadgeConfig(link);
+                return (
+                  <div
+                    key={link.id}
+                    className="glass-panel"
+                    style={{
+                      padding: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '16px',
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    {/* Left group */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: '1 1 300px' }}>
+                      <div style={{
+                        backgroundColor: 'var(--muted-light)',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginTop: '2px'
+                      }}>
+                        {renderAppIcon(link.app_source)}
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ fontWeight: '600', fontSize: '15px', color: 'var(--foreground)', wordBreak: 'break-word' }}>
+                          {link.note || 'Untitled Link'}
+                        </div>
+                        
+                        <a
+                          href={`/api/links/${link.id}/open`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: '13px',
+                            color: 'var(--muted)',
+                            wordBreak: 'break-all',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {link.url}
+                          <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                        </a>
+
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                          <span>{getDaysSince(link.created_at)}</span>
+                          {link.category_name && (
+                            <>
+                              <span>•</span>
+                              <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '500' }}>
+                                {link.category_name}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right actions group */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', flexWrap: 'nowrap' }}>
+                      <span className={`badge ${badge.className}`}>
+                        {badge.label}
+                      </span>
+
+                      {viewMode === 'pending' ? (
+                        <a
+                          href={`/api/links/${link.id}/open`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary"
+                          style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => handleDeleteLink(link.id)}
+                          style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Permanently Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Right actions group */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', flexWrap: 'nowrap' }}>
-                  <span className={`badge ${badge.className}`}>
-                    {badge.label}
-                  </span>
-
-                  {viewMode === 'pending' ? (
-                    <a
-                      href={`/api/links/${link.id}/open`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary"
-                      style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      Open
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={() => handleDeleteLink(link.id)}
-                      style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title="Permanently Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -538,22 +917,20 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.4)',
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(6px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000,
           padding: '16px'
         }}>
-          <div style={{
-            backgroundColor: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
+          <div className="glass-panel" style={{
             padding: '24px',
             maxWidth: '460px',
             width: '100%',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            position: 'relative'
+            position: 'relative',
+            background: 'rgba(255, 255, 255, 0.92)'
           }}>
             <button
               type="button"
@@ -719,6 +1096,119 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Category Deletion Choice Modal */}
+      {deletingCategory && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div className="glass-panel" style={{
+            padding: '28px',
+            maxWidth: '480px',
+            width: '100%',
+            position: 'relative',
+            background: 'rgba(255, 255, 255, 0.92)'
+          }}>
+            <button
+              type="button"
+              onClick={() => setDeletingCategory(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)'
+              }}
+              title="Close Modal"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--foreground)', marginBottom: '8px', paddingRight: '24px' }}>
+              Delete Category: {deletingCategory.name}
+            </h3>
+            
+            {(deletingCategory.total_count || 0) > 0 ? (
+              <>
+                <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>
+                  This category contains <strong>{deletingCategory.total_count}</strong> associated links. How would you like to proceed?
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => handleDeleteCategory(deletingCategory.id, 'only')}
+                    style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px' }}
+                  >
+                    <span style={{ fontWeight: '600', fontSize: '14px', color: 'var(--foreground)' }}>Delete category only</span>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Links will be kept and marked as Uncategorized.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn style-danger"
+                    onClick={() => handleDeleteCategory(deletingCategory.id, 'all')}
+                    style={{
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      padding: '12px',
+                      backgroundColor: '#fee2e2',
+                      border: '1px solid #fca5a5',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ fontWeight: '600', fontSize: '14px', color: '#991b1b' }}>Delete category and its links</span>
+                    <span style={{ fontSize: '12px', color: '#b91c1c' }}>Permanently deletes this category and all of its associated links.</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>
+                  Are you sure you want to delete this category? It contains no links.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => handleDeleteCategory(deletingCategory.id, 'only')}
+                    style={{ width: '100%', padding: '12px' }}
+                  >
+                    Delete Category
+                  </button>
+                </div>
+              </>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setDeletingCategory(null)}
+              style={{ marginTop: '10px', width: '100%' }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
