@@ -44,6 +44,15 @@ interface Stats {
   pending: number;
   visitedNotClosed: number;
   doneThisWeek: number;
+  completedToday: number;
+  completedThisWeek: number;
+  markedForLater: number;
+  weeklyProgress: {
+    day: string;
+    dayName: string;
+    saved: number;
+    completed: number;
+  }[];
 }
 
 interface DashboardContainerProps {
@@ -60,10 +69,14 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
     pending: 0,
     visitedNotClosed: 0,
     doneThisWeek: 0,
+    completedToday: 0,
+    completedThisWeek: 0,
+    markedForLater: 0,
+    weeklyProgress: [],
   });
 
   // Filter redesign state
-  const [filterMode, setFilterMode] = useState<'none' | 'category' | 'apps'>('none');
+  const [filterMode, setFilterMode] = useState<'category' | 'apps'>('category');
   const [drilledCategory, setDrilledCategory] = useState<Category | 'uncategorized' | null>(null);
   const [drilledApp, setDrilledApp] = useState<string | null>(null);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
@@ -381,41 +394,307 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* 4 Stat Cards */}
+      {/* 2 Combined Stat Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+        gap: '20px'
       }}>
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ backgroundColor: 'var(--muted-light)', padding: '10px', borderRadius: '8px', color: 'var(--muted)' }}><Inbox size={22} /></div>
-          <div>
-            <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Total Saved</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '2px' }}>{stats.totalSaved}</div>
+        {/* Left Card: Black Card (Opposite Theme) */}
+        <div style={{
+          backgroundColor: '#111827',
+          color: '#ffffff',
+          borderRadius: '30px',
+          padding: '24px',
+          display: 'grid',
+          gridTemplateRows: '1fr 1fr', // Split exactly half-half
+          minHeight: '280px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
+        }}>
+          {/* Top Half (Total Saved | Remaining) */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)', 
+            paddingBottom: '18px' // Adjusted padding to balance space before divider
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ backgroundColor: 'rgba(255,255,255,0.08)', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Inbox size={24} color="#3b82f6" />
+              </span>
+              <div>
+                <div style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Saved</div>
+                <div style={{ fontSize: '25px', fontWeight: '800', color: '#ffffff', lineHeight: '1.1', marginTop: '2px' }}>{stats.totalSaved}</div>
+              </div>
+            </div>
+            
+            <div style={{ height: '42px', width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.15)' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'right' }}>
+              <div>
+                <div style={{ fontSize: '13px', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Remaining</div>
+                <div style={{ fontSize: '25px', fontWeight: '800', color: '#ffffff', lineHeight: '1.1', marginTop: '2px' }}>{stats.pending}</div>
+              </div>
+              <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Clock size={24} color="#60a5fa" />
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom Half (3 nested light cards) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px',
+            alignItems: 'stretch', // Stretches sub-cards to fill the bottom half height
+            paddingTop: '18px', // Spacing after divider
+            height: '100%'
+          }}>
+            {/* Sub Card 1: Completed Today */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              color: '#111827',
+              borderRadius: '18px',
+              padding: '14px 10px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+              height: '100%'
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '4px' }}>Today</div>
+              <div style={{ fontSize: '25px', fontWeight: '800', color: '#111827', lineHeight: '1.1' }}>{stats.completedToday}</div>
+            </div>
+
+            {/* Sub Card 2: Completed This Week */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              color: '#111827',
+              borderRadius: '18px',
+              padding: '14px 10px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+              height: '100%'
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '4px' }}>This Week</div>
+              <div style={{ fontSize: '25px', fontWeight: '800', color: '#111827', lineHeight: '1.1' }}>{stats.completedThisWeek}</div>
+            </div>
+
+            {/* Sub Card 3: Mark for Later */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              color: '#111827',
+              borderRadius: '18px',
+              padding: '14px 10px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+              height: '100%'
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '4px' }}>Snoozed</div>
+              <div style={{ fontSize: '25px', fontWeight: '800', color: '#111827', lineHeight: '1.1' }}>{stats.markedForLater}</div>
+            </div>
           </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ backgroundColor: 'var(--primary-light)', padding: '10px', borderRadius: '8px', color: 'var(--primary)' }}><Clock size={22} /></div>
-          <div>
-            <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Pending Links</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '2px' }}>{stats.pending}</div>
+        {/* Right Card: Weekly Progress (Light Card) */}
+        <div className="glass-panel" style={{
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '280px'
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--foreground)' }}>Weekly Progress</span>
+            <div style={{ display: 'flex', gap: '12px', fontSize: '11px', fontWeight: '600' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--foreground)' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#111827' }} />
+                <span>Completed</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--muted)' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#d1d5db' }} />
+                <span>Saved</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ backgroundColor: '#fffbeb', padding: '10px', borderRadius: '8px', color: '#d97706' }}><AlertCircle size={22} /></div>
-          <div>
-            <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Visited & Open</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '2px' }}>{stats.visitedNotClosed}</div>
+          {/* Graph Area */}
+          <div style={{ flexGrow: 1, position: 'relative', minHeight: '130px', display: 'flex', alignItems: 'center', width: '100%', marginTop: '4px' }}>
+            {stats.weeklyProgress && stats.weeklyProgress.length > 0 ? (
+              (() => {
+                const width = 350;
+                const height = 120;
+                const todayIndex = (new Date().getDay() + 6) % 7;
+                const todayX = (todayIndex + 0.5) * (width / 7);
+                
+                // Calculate max value dynamically
+                const maxVal = Math.max(
+                  1,
+                  ...stats.weeklyProgress.map((d) => d.saved),
+                  ...stats.weeklyProgress.map((d) => d.completed)
+                );
+
+                // Generate points
+                const savedPoints = stats.weeklyProgress.map((d, i) => {
+                  const x = (i + 0.5) * (width / 7);
+                  const y = height - 10 - (d.saved / maxVal) * (height - 20);
+                  return { x, y };
+                });
+
+                const completedPoints = stats.weeklyProgress.map((d, i) => {
+                  const x = (i + 0.5) * (width / 7);
+                  const y = height - 10 - (d.completed / maxVal) * (height - 20);
+                  return { x, y };
+                });
+
+                // Function to build curvy bezier spline path
+                const getCurvyPath = (points: { x: number; y: number }[]) => {
+                  if (points.length === 0) return '';
+                  let path = `M ${points[0].x} ${points[0].y}`;
+                  for (let i = 0; i < points.length - 1; i++) {
+                    const p0 = points[i];
+                    const p1 = points[i + 1];
+                    const cp1x = p0.x + (p1.x - p0.x) / 2;
+                    const cp1y = p0.y;
+                    const cp2x = p0.x + (p1.x - p0.x) / 2;
+                    const cp2y = p1.y;
+                    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p1.x} ${p1.y}`;
+                  }
+                  return path;
+                };
+
+                return (
+                  <svg 
+                    viewBox={`0 0 ${width} ${height}`} 
+                    style={{ width: '100%', height: '100%', overflow: 'visible' }}
+                  >
+                    {/* Grid lines (horizontal helper lines) */}
+                    <line x1="0" y1={height - 10} x2={width} y2={height - 10} stroke="rgba(0,0,0,0.03)" strokeWidth="1" />
+                    <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(0,0,0,0.02)" strokeWidth="1" />
+                    <line x1="0" y1="10" x2={width} y2="10" stroke="rgba(0,0,0,0.02)" strokeWidth="1" strokeDasharray="2 2" />
+
+                    {/* Vertical guideline for today */}
+                    <line 
+                      x1={todayX} 
+                      y1="0" 
+                      x2={todayX} 
+                      y2={height} 
+                      stroke="rgba(17, 24, 39, 0.08)" 
+                      strokeWidth="1.5" 
+                      strokeDasharray="3 3" 
+                    />
+
+                    {/* Saved curve (light grey) */}
+                    <path 
+                      d={getCurvyPath(savedPoints)} 
+                      fill="none" 
+                      stroke="#d1d5db" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round"
+                    />
+
+                    {/* Completed curve (black) */}
+                    <path 
+                      d={getCurvyPath(completedPoints)} 
+                      fill="none" 
+                      stroke="#111827" 
+                      strokeWidth="3" 
+                      strokeLinecap="round"
+                    />
+
+                    {/* Saved Points Dots */}
+                    {savedPoints.map((p, idx) => {
+                      const isToday = idx === todayIndex;
+                      return (
+                        <circle 
+                          key={`s-${idx}`} 
+                          cx={p.x} 
+                          cy={p.y} 
+                          r={isToday ? "5" : "3.5"} 
+                          fill={isToday ? "#d1d5db" : "#ffffff"} 
+                          stroke="#d1d5db" 
+                          strokeWidth={isToday ? "3" : "2"} 
+                        />
+                      );
+                    })}
+
+                    {/* Completed Points Dots */}
+                    {completedPoints.map((p, idx) => {
+                      const isToday = idx === todayIndex;
+                      return (
+                        <circle 
+                          key={`c-${idx}`} 
+                          cx={p.x} 
+                          cy={p.y} 
+                          r={isToday ? "5" : "3.5"} 
+                          fill={isToday ? "#111827" : "#ffffff"} 
+                          stroke="#111827" 
+                          strokeWidth={isToday ? "3" : "2"} 
+                        />
+                      );
+                    })}
+                  </svg>
+                );
+              })()
+            ) : (
+              <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+                No weekly data available
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ backgroundColor: '#ecfdf5', padding: '10px', borderRadius: '8px', color: '#059669' }}><CheckCircle2 size={22} /></div>
-          <div>
-            <div style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: '500' }}>Done This Week</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '2px' }}>{stats.doneThisWeek}</div>
+          {/* Weekdays Labels footer aligned exactly */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            textAlign: 'center',
+            fontSize: '11px',
+            fontWeight: '700',
+            color: 'var(--muted)',
+            marginTop: '8px',
+            borderTop: '1px solid var(--border)',
+            paddingTop: '8px'
+          }}>
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+              const isToday = idx === ((new Date().getDay() + 6) % 7);
+              return (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <span style={isToday ? {
+                    backgroundColor: '#111827',
+                    color: '#ffffff',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: '800',
+                    fontSize: '11px'
+                  } : {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}>
+                    {day}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -465,7 +744,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
         </div>
 
         {/* Sort Order Toggle */}
-        {(filterMode === 'none' || drilledCategory !== null || drilledApp !== null) && (
+        {(drilledCategory !== null || drilledApp !== null) && (
           <div>
             <button
               type="button"
@@ -489,23 +768,11 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', fontSize: '13px' }}
           >
-            <span>Filter by: {filterMode === 'none' ? 'None' : filterMode === 'category' ? 'Category' : 'Apps'}</span>
+            <span>Filter by: {filterMode === 'category' ? 'Category' : 'Apps'}</span>
           </button>
           
           {filterDropdownOpen && (
             <div className="dropdown-menu">
-              <div 
-                className={`dropdown-item ${filterMode === 'none' ? 'active' : ''}`}
-                onClick={() => {
-                  setFilterMode('none');
-                  setCategoryFilter('all');
-                  setAppFilter('all');
-                  setDrilledCategory(null);
-                  setDrilledApp(null);
-                }}
-              >
-                None
-              </div>
               <div 
                 className={`dropdown-item ${filterMode === 'category' ? 'active' : ''}`}
                 onClick={() => {
@@ -543,22 +810,6 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       ) : filterMode === 'category' && !drilledCategory ? (
         /* Render Category Grid */
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <button 
-              className="btn btn-secondary"
-              style={{ fontSize: '13px', padding: '6px 12px' }}
-              onClick={() => {
-                setFilterMode('none');
-                setCategoryFilter('all');
-                setDrilledCategory(null);
-              }}
-            >
-              ← Back to All Links
-            </button>
-            <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '500' }}>
-              Filter by Category
-            </span>
-          </div>
 
           <div className="card-grid">
             {categories.map((cat) => {
@@ -683,22 +934,6 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       ) : filterMode === 'apps' && !drilledApp ? (
         /* Render Apps Grid */
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <button 
-              className="btn btn-secondary"
-              style={{ fontSize: '13px', padding: '6px 12px' }}
-              onClick={() => {
-                setFilterMode('none');
-                setAppFilter('all');
-                setDrilledApp(null);
-              }}
-            >
-              ← Back to All Links
-            </button>
-            <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '500' }}>
-              Filter by Apps
-            </span>
-          </div>
 
           <div className="card-grid">
             {sources.map((src) => {
@@ -743,17 +978,6 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
               >
                 ← Back to Categories
               </button>
-              <button 
-                className="btn btn-secondary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => {
-                  setFilterMode('none');
-                  setCategoryFilter('all');
-                  setDrilledCategory(null);
-                }}
-              >
-                ← Back to All Links
-              </button>
               <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '600', marginLeft: 'auto' }}>
                 Category: {drilledCategory === 'uncategorized' ? 'Uncategorized' : drilledCategory.name}
               </span>
@@ -771,17 +995,6 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
                 }}
               >
                 ← Back to Apps
-              </button>
-              <button 
-                className="btn btn-secondary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
-                onClick={() => {
-                  setFilterMode('none');
-                  setAppFilter('all');
-                  setDrilledApp(null);
-                }}
-              >
-                ← Back to All Links
               </button>
               <span style={{ fontSize: '14px', color: 'var(--muted)', fontWeight: '600', marginLeft: 'auto' }}>
                 App Source: {drilledApp.charAt(0).toUpperCase() + drilledApp.slice(1)}
