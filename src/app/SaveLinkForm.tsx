@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { trpc } from '@/lib/trpc';
 
 interface Category {
   id: string;
@@ -22,6 +23,8 @@ export default function SaveLinkForm({ initialCategories, initialUrl = '' }: Sav
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const createLink = trpc.links.create.useMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,19 +47,10 @@ export default function SaveLinkForm({ initialCategories, initialUrl = '' }: Sav
         url: url.trim(),
         note: note.trim(),
         categoryId: selectedCategory === 'new' || selectedCategory === '' ? null : selectedCategory,
-        newCategoryName: selectedCategory === 'new' ? newCategoryName.trim() : null,
+        newCategoryName: selectedCategory === 'new' ? newCategoryName.trim() : undefined,
       };
 
-      const res = await fetch('/api/links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save link.');
-      }
+      const data = await createLink.mutateAsync(payload);
 
       setSuccess(true);
       

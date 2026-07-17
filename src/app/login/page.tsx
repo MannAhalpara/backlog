@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { trpc } from '@/lib/trpc';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -9,6 +10,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  const sendOtp = trpc.auth.sendOtp.useMutation();
+  const verifyOtp = trpc.auth.verifyOtp.useMutation();
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,15 +24,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to send verification code.');
-      }
+      await sendOtp.mutateAsync({ email });
       setSuccessMsg(`Verification code sent to ${email}`);
       setStep(2);
     } catch (err: any) {
@@ -48,15 +44,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Invalid or expired code.');
-      }
+      await verifyOtp.mutateAsync({ email, code });
       
       // Successfully authenticated! Redirect to home page using full page navigation
       // to ensure cookies are read and Navbar server component is re-evaluated.

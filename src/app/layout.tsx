@@ -3,6 +3,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import ParticlesBackground from '@/components/ParticlesBackground';
+import TRPCProvider from '@/components/TRPCProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,18 +31,20 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ServiceWorkerRegister />
-        <ParticlesBackground />
-        
-        {/* Glow Blobs for Glassmorphism Backdrop */}
-        <div className="glow-blob" style={{ top: '8%', left: '8%', width: '320px', height: '320px', background: 'radial-gradient(circle, rgba(219, 234, 254, 0.7) 0%, rgba(219, 234, 254, 0) 70%)' }}></div>
-        <div className="glow-blob" style={{ bottom: '15%', right: '8%', width: '380px', height: '380px', background: 'radial-gradient(circle, rgba(243, 232, 255, 0.7) 0%, rgba(243, 232, 255, 0) 70%)' }}></div>
-        <div className="glow-blob" style={{ top: '55%', left: '50%', transform: 'translate(-50%, -50%)', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(241, 245, 249, 0.9) 0%, rgba(241, 245, 249, 0) 70%)' }}></div>
+        <TRPCProvider>
+          <ServiceWorkerRegister />
+          <ParticlesBackground />
+          
+          {/* Glow Blobs for Glassmorphism Backdrop */}
+          <div className="glow-blob" style={{ top: '8%', left: '8%', width: '320px', height: '320px', background: 'radial-gradient(circle, rgba(219, 234, 254, 0.7) 0%, rgba(219, 234, 254, 0) 70%)' }}></div>
+          <div className="glow-blob" style={{ bottom: '15%', right: '8%', width: '380px', height: '380px', background: 'radial-gradient(circle, rgba(243, 232, 255, 0.7) 0%, rgba(243, 232, 255, 0) 70%)' }}></div>
+          <div className="glow-blob" style={{ top: '55%', left: '50%', transform: 'translate(-50%, -50%)', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(241, 245, 249, 0.9) 0%, rgba(241, 245, 249, 0) 70%)' }}></div>
 
-        <Navbar />
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {children}
-        </main>
+          <Navbar />
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {children}
+          </main>
+        </TRPCProvider>
       </body>
     </html>
   );

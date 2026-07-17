@@ -17,6 +17,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { LinkedInIcon, InstagramIcon, YouTubeIcon } from '@/components/BrandIcons';
+import { trpc } from '@/lib/trpc';
 
 interface Category {
   id: string;
@@ -111,75 +112,54 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Debounce search query
+  const utils = trpc.useContext();
+
+  // Queries
+  const linksQuery = trpc.links.list.useQuery({
+    app: appFilter,
+    category: categoryFilter,
+    search: debouncedSearch,
+    sort: sortOrder,
+    view: viewMode,
+  });
+
+  const statsQuery = trpc.links.stats.useQuery();
+  const categoriesQuery = trpc.categories.list.useQuery();
+  const pendingPopupQuery = trpc.links.pendingPopup.useQuery();
+
+  // Mutations
+  const deleteLinkMutation = trpc.links.delete.useMutation();
+  const updateLinkMutation = trpc.links.update.useMutation();
+  const popupResponseMutation = trpc.links.popupResponse.useMutation();
+  const updateCategoryMutation = trpc.categories.update.useMutation();
+  const deleteCategoryMutation = trpc.categories.delete.useMutation();
+
+  // Sync queries with local state to preserve existing logic
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Fetch links & filters metadata
-  const fetchLinks = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        app: appFilter,
-        category: categoryFilter,
-        search: debouncedSearch,
-        sort: sortOrder,
-        view: viewMode,
-      });
-
-      const res = await fetch(`/api/links?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch links');
-      const data = await res.json();
-      setLinks(data.links || []);
-      setSources(data.sources || []);
-    } catch (err) {
-      console.error('Error fetching links:', err);
-    } finally {
-      setLoading(false);
+    if (linksQuery.data) {
+      setLinks(linksQuery.data.links || []);
+      setSources(linksQuery.data.sources || []);
     }
-  };
+  }, [linksQuery.data]);
 
-  // Fetch Stats
-  const fetchStats = async () => {
-    try {
-      const res = await fetch('/api/links/stats');
-      if (!res.ok) throw new Error('Failed to fetch stats');
-      const data = await res.json();
-      setStats(data);
-    } catch (err) {
-      console.error('Error fetching stats:', err);
+  useEffect(() => {
+    if (statsQuery.data) {
+      setStats(statsQuery.data as Stats);
     }
-  };
+  }, [statsQuery.data]);
 
-  // Fetch Categories with counts
-  const fetchCategories = async () => {
-    try {
-      const res = await fetch('/api/categories');
-      if (!res.ok) throw new Error('Failed to fetch categories');
-      const data = await res.json();
-      setCategories(data.categories || []);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
+  useEffect(() => {
+    if (categoriesQuery.data) {
+      setCategories(categoriesQuery.data.categories || []);
     }
-  };
+  }, [categoriesQuery.data]);
 
-  // Fetch Popups & Filter by LocalStorage dismissals
-  const checkPopups = async () => {
-    try {
-      const res = await fetch('/api/links/pending-popup');
-      if (!res.ok) throw new Error('Failed to fetch popups');
-      const data = await res.json();
-      const pendingPopups = data.links || [];
-
-      // Load dismissed list from localStorage
+  useEffect(() => {
+    if (pendingPopupQuery.data) {
+      const pendingPopups = pendingPopupQuery.data.links || [];
       const dismissalsRaw = localStorage.getItem('dismissed_popups');
       const dismissals = dismissalsRaw ? JSON.parse(dismissalsRaw) : {};
 
-      // Filter out links where clicked_at is older than or equal to dismissal time
       const activePopups = pendingPopups.filter((link: LinkItem) => {
         if (!link.clicked_at) return false;
         const clickedTime = new Date(link.clicked_at).getTime();
@@ -188,10 +168,37 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       });
 
       popupLinksSet(activePopups);
-    } catch (err) {
-      console.error('Error checking popups:', err);
     }
+  }, [pendingPopupQuery.data]);
+
+  useEffect(() => {
+    setLoading(linksQuery.isLoading);
+  }, [linksQuery.isLoading]);
+
+  // Invalidation wrappers for back-compatibility
+  const fetchLinks = async () => {
+    await utils.links.list.invalidate();
   };
+
+  const fetchStats = async () => {
+    await utils.links.stats.invalidate();
+  };
+
+  const fetchCategories = async () => {
+    await utils.categories.list.invalidate();
+  };
+
+  const checkPopups = async () => {
+    await utils.links.pendingPopup.invalidate();
+  };
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const popupLinksSet = (activePopups: LinkItem[]) => {
     setPopupLinks(activePopups);
@@ -203,18 +210,6 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       setActivePopupIndex(null);
     }
   };
-
-  // Initial load and whenever filters change
-  useEffect(() => {
-    fetchLinks();
-  }, [appFilter, categoryFilter, debouncedSearch, sortOrder, viewMode]);
-
-  // Load stats, categories and popups on page mount
-  useEffect(() => {
-    fetchStats();
-    fetchCategories();
-    checkPopups();
-  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -275,7 +270,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
 
     setActionLoading(true);
     try {
-      let remindAtDate: string | null = null;
+      let remindAtDate: string | undefined = undefined;
       if (action === 'remind') {
         if (dateOffsetDays !== undefined) {
           const date = new Date();
@@ -291,13 +286,11 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       }
 
       // 1. Submit response to API
-      const res = await fetch(`/api/links/${currentLink.id}/popup-response`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, remindAtDate }),
+      await popupResponseMutation.mutateAsync({
+        id: currentLink.id,
+        action,
+        remindAtDate,
       });
-
-      if (!res.ok) throw new Error('Failed to submit popup response');
 
       // 2. If action is dismiss, log to localStorage to suppress further prompts locally
       if (action === 'dismiss') {
@@ -320,6 +313,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       fetchLinks();
       fetchStats();
       fetchCategories();
+      checkPopups();
     } catch (err) {
       console.error('Error processing popup action:', err);
       alert('Error updating link.');
@@ -335,10 +329,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
     }
 
     try {
-      const res = await fetch(`/api/links/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete link');
+      await deleteLinkMutation.mutateAsync({ id });
 
       // Refetch stats, categories & links
       fetchLinks();
@@ -360,19 +351,11 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
 
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/links/${editingLink.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          note: editNoteValue.trim(),
-          url: editUrlValue.trim(),
-        }),
+      await updateLinkMutation.mutateAsync({
+        id: editingLink.id,
+        note: editNoteValue.trim(),
+        url: editUrlValue.trim(),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to update link');
-      }
 
       setEditingLink(null);
       await fetchLinks();
@@ -392,18 +375,10 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
 
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/links/${movingLink.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category_id: moveCategoryIdValue,
-        }),
+      await updateLinkMutation.mutateAsync({
+        id: movingLink.id,
+        category_id: moveCategoryIdValue,
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to move link');
-      }
 
       setMovingLink(null);
       await fetchLinks();
@@ -424,16 +399,10 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
       return;
     }
     try {
-      const res = await fetch(`/api/categories/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: renameValue.trim() }),
+      await updateCategoryMutation.mutateAsync({
+        id,
+        name: renameValue.trim(),
       });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to rename category');
-      }
       
       setEditingCategoryId(null);
       await fetchCategories();
@@ -450,10 +419,10 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
 
   const handleDeleteCategory = async (id: string, mode: 'only' | 'all') => {
     try {
-      const res = await fetch(`/api/categories/${id}?mode=${mode}`, {
-        method: 'DELETE',
+      await deleteCategoryMutation.mutateAsync({
+        id,
+        mode,
       });
-      if (!res.ok) throw new Error('Failed to delete category');
       
       setDeletingCategory(null);
       await fetchCategories();

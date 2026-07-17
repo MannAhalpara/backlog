@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 
 interface NavbarClientProps {
   user: any;
@@ -12,6 +13,19 @@ interface NavbarClientProps {
 export default function NavbarClient({ user }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  const logout = trpc.auth.logout.useMutation();
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await logout.mutateAsync();
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -103,13 +117,14 @@ export default function NavbarClient({ user }: NavbarClientProps) {
               <Link href="/dashboard" style={{ fontSize: '14px', fontWeight: '500', color: 'var(--muted)' }}>
                 Dashboard
               </Link>
-              <a 
-                href="/api/auth/logout" 
+              <button 
+                type="button"
+                onClick={handleLogout}
                 className="btn btn-secondary" 
                 style={{ padding: '6px 12px', fontSize: '13px' }}
               >
                 Log Out
-              </a>
+              </button>
             </nav>
           ) : (
             <nav>
@@ -184,13 +199,14 @@ export default function NavbarClient({ user }: NavbarClientProps) {
                 >
                   Dashboard
                 </Link>
-                <a 
-                  href="/api/auth/logout" 
+                <button 
+                  type="button"
+                  onClick={handleLogout}
                   className="btn btn-secondary" 
                   style={{ width: '100%', padding: '10px 14px', fontSize: '14px', textAlign: 'center', marginTop: '4px' }}
                 >
                   Log Out
-                </a>
+                </button>
               </>
             ) : (
               <Link 
