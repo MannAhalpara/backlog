@@ -112,7 +112,7 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const utils = trpc.useContext();
+  const utils = trpc.useUtils();
 
   // Queries
   const linksQuery = trpc.links.list.useQuery({
