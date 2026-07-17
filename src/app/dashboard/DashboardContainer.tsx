@@ -100,6 +100,13 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
   const [remindMode, setRemindMode] = useState(false);
   const [customRemindDate, setCustomRemindDate] = useState('');
 
+  // Edit & Move states
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
+  const [movingLink, setMovingLink] = useState<LinkItem | null>(null);
+  const [editNoteValue, setEditNoteValue] = useState('');
+  const [editUrlValue, setEditUrlValue] = useState('');
+  const [moveCategoryIdValue, setMoveCategoryIdValue] = useState<string | null>(null);
+
   // Loading states
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -340,6 +347,73 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
     } catch (err) {
       console.error('Error deleting link:', err);
       alert('Could not delete link.');
+    }
+  };
+
+  // Save Link Edit (Title & URL)
+  const handleSaveLinkEdit = async () => {
+    if (!editingLink) return;
+    if (!editUrlValue || editUrlValue.trim() === '') {
+      alert('URL cannot be empty.');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/links/${editingLink.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          note: editNoteValue.trim(),
+          url: editUrlValue.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update link');
+      }
+
+      setEditingLink(null);
+      await fetchLinks();
+      await fetchStats();
+      await fetchCategories();
+    } catch (err: any) {
+      console.error('Error updating link:', err);
+      alert(err.message || 'Could not update link.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Save Link Move (Category)
+  const handleSaveLinkMove = async () => {
+    if (!movingLink) return;
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/links/${movingLink.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_id: moveCategoryIdValue,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to move link');
+      }
+
+      setMovingLink(null);
+      await fetchLinks();
+      await fetchStats();
+      await fetchCategories();
+    } catch (err: any) {
+      console.error('Error moving link:', err);
+      alert(err.message || 'Could not move link.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1093,25 +1167,83 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
                       </span>
 
                       {viewMode === 'pending' ? (
-                        <a
-                          href={`/api/links/${link.id}/open`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-secondary"
-                          style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        >
-                          Open
-                        </a>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
+                          <a
+                            href={`/api/links/${link.id}/open`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                          >
+                            Open
+                          </a>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setMovingLink(link);
+                                setMoveCategoryIdValue(link.category_id);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '11px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Move Category"
+                            >
+                              Move
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setEditingLink(link);
+                                setEditNoteValue(link.note || '');
+                                setEditUrlValue(link.url);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '11px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Edit Link"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={() => handleDeleteLink(link.id)}
-                          style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title="Permanently Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={() => handleDeleteLink(link.id)}
+                            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                            title="Permanently Delete"
+                          >
+                            Delete
+                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setMovingLink(link);
+                                setMoveCategoryIdValue(link.category_id);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '11px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Move Category"
+                            >
+                              Move
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setEditingLink(link);
+                                setEditNoteValue(link.note || '');
+                                setEditUrlValue(link.url);
+                              }}
+                              style={{ padding: '4px 8px', fontSize: '11px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              title="Edit Link"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1422,6 +1554,198 @@ export default function DashboardContainer({ initialCategories }: DashboardConta
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Link Modal */}
+      {editingLink && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div className="glass-panel" style={{
+            padding: '28px',
+            maxWidth: '480px',
+            width: '100%',
+            position: 'relative',
+            background: 'rgba(255, 255, 255, 0.92)'
+          }}>
+            <button
+              type="button"
+              onClick={() => setEditingLink(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)'
+              }}
+              title="Close Modal"
+              disabled={actionLoading}
+            >
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--foreground)', marginBottom: '16px' }}>
+              Edit Link
+            </h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>
+                  Title / Short Note
+                </label>
+                <input
+                  type="text"
+                  value={editNoteValue}
+                  onChange={(e) => setEditNoteValue(e.target.value)}
+                  placeholder="Enter a short note..."
+                  style={{ width: '100%' }}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>
+                  URL
+                </label>
+                <input
+                  type="text"
+                  value={editUrlValue}
+                  onChange={(e) => setEditUrlValue(e.target.value)}
+                  placeholder="Enter URL..."
+                  style={{ width: '100%' }}
+                  disabled={actionLoading}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingLink(null)}
+                  style={{ flex: 1 }}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveLinkEdit}
+                  style={{ flex: 1 }}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Category Modal */}
+      {movingLink && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div className="glass-panel" style={{
+            padding: '28px',
+            maxWidth: '480px',
+            width: '100%',
+            position: 'relative',
+            background: 'rgba(255, 255, 255, 0.92)'
+          }}>
+            <button
+              type="button"
+              onClick={() => setMovingLink(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)'
+              }}
+              title="Close Modal"
+              disabled={actionLoading}
+            >
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--foreground)', marginBottom: '8px' }}>
+              Move to Category
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>
+              Select a new category for: <strong>{movingLink.note || 'Untitled Link'}</strong>
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>
+                  Category
+                </label>
+                <select
+                  value={moveCategoryIdValue || ''}
+                  onChange={(e) => setMoveCategoryIdValue(e.target.value || null)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  disabled={actionLoading}
+                >
+                  <option value="">Uncategorized</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setMovingLink(null)}
+                  style={{ flex: 1 }}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveLinkMove}
+                  style={{ flex: 1 }}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Moving...' : 'Move Link'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
